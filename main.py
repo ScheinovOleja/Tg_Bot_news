@@ -22,6 +22,41 @@ class TgBot:
         self.bot = tb.TeleBot(token=TOKEN)
         self.def_bots()
         self.message_start = None
+        self.news = None
+
+    # def async_mailing(self):
+    #     self.news = TokenSale.objects.all()
+    #     test = []
+    #     while True:
+    #         for new
+    #         markup_key = types.InlineKeyboardMarkup(row_width=2)
+    #         try:
+    #             theme = Themes.objects.get(name=context['theme'])
+    #         except Exception:
+    #             theme = None
+    #             users = Users.objects.all()
+    #         else:
+    #             users = Users.objects.filter(tracked_themes=theme.id)
+    #         new = TokenSale.objects.get(name=context['name'])
+    #         text = f'Новая новость!!\n\n' \
+    #                f'{new.name}{"" if not theme else f"на {theme.name}"}\n\n' \
+    #                f'Конец регистрации - {new.date_participation}\n\n' \
+    #                f'{new.description}'
+    #         if new.is_reminder:
+    #             markup_key.add(types.InlineKeyboardButton(
+    #                 text="Напомнить за 12 часов", callback_data=f"{new.id}_twelve_hours"))
+    #             markup_key.add(types.InlineKeyboardButton(
+    #                 text="Напомнить за 1 часов", callback_data=f"{new.id}_one_hour"))
+    #         if new.is_follow:
+    #             markup_key.add(types.InlineKeyboardButton(
+    #                 text="Следить за результатами",
+    #                 callback_data=f"{new.theme.name}_b_follow"))
+    #         for user in users:
+    #             send_text(
+    #                 chat_id=user.user_id,
+    #                 text_to_send=text,
+    #                 local_markup=markup_key
+    #             )
 
     def async_reminder(self):
         while True:
@@ -324,7 +359,7 @@ class TgBot:
             new = TokenSale.objects.get(name=context['name'])
             text = f'Новая новость!!\n\n' \
                    f'{new.name}{"" if not theme else f"на {theme.name}"}\n\n' \
-                   f'Конец регистрации - {new.date_participation}\n\n' \
+                   f'Конец регистрации - {new.date_participation.replace(tzinfo=None)}\n\n' \
                    f'{new.description}'
             if new.is_reminder:
                 markup_key.add(types.InlineKeyboardButton(
