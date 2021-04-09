@@ -21,6 +21,7 @@ class TgBot:
     def __init__(self):
         self.bot = tb.TeleBot(token=TOKEN)
         self.def_bots()
+        self.message_start = None
 
     def async_reminder(self):
         while True:
@@ -118,46 +119,44 @@ class TgBot:
                 except:
                     continue
 
-        @log_error
-        @self.bot.callback_query_handler(func=lambda call: call.data == "update")
-        def update(call):
-            self.bot.delete_message(call.message.chat.id, call.message.message_id)
-            run(call.message)
+        def update_start_message(message, markup):
+            user = Users.objects.get(user_id=message.chat.id)
+            tracked_themes = user.tracked_themes.all()
+            themes = Themes.objects.all()
+            for theme in themes:
+                if theme in tracked_themes:
+                    markup.add(types.InlineKeyboardButton(text=f"✅ {theme.name}",
+                                                          callback_data=f"{theme.name}_b_unfollow"))
+                else:
+                    markup.add(types.InlineKeyboardButton(text=f"{theme.name}",
+                                                          callback_data=f"{theme.name}_b_follow"))
+            markup.add(types.InlineKeyboardButton(text="Вопрос/предложение ✍🏻", callback_data="question"))
+            return markup
 
         @log_error
         @self.bot.message_handler(commands=['start'])
         def run(message):
-            user = Users.objects.get(user_id=message.chat.id)
-            tracked_themes = user.tracked_themes.all()
+            self.message_start = message.message_id
             markup_moder = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
             if not check_moderator(message):
                 markup_key = types.InlineKeyboardMarkup(row_width=2)
-                themes = Themes.objects.all()
-                for theme in themes:
-                    if theme in tracked_themes:
-                        markup_key.add(types.InlineKeyboardButton(text=f"✅ {theme.name}",
-                                                                  callback_data=f"{theme.name}_b_unfollow"))
-                    else:
-                        markup_key.add(types.InlineKeyboardButton(text=f"{theme.name}",
-                                                                  callback_data=f"{theme.name}_b_follow"))
-                markup_key.add(types.InlineKeyboardButton(text="Обновить список тем", callback_data="update"))
-                markup_key.add(types.InlineKeyboardButton(text="Вопрос/предложение ✍🏻", callback_data="question"))
-                try:
-                    msg = send_text(
-                        text_to_send="/",
-                        chat_id=message.chat.id,
-                        local_markup=types.ReplyKeyboardRemove()
-                    )
-                except:
-                    msg = send_text(
-                        text_to_send="/",
-                        chat_id=message.chat.id
-                    )
-                self.bot.delete_message(msg.chat.id, msg.message_id)
+                markup_key = update_start_message(message, markup_key)
+                # try:
+                #     msg = send_text(
+                #         text_to_send="/",
+                #         chat_id=message.chat.id,
+                #         local_markup=types.ReplyKeyboardRemove()
+                #     )
+                # except:
+                #     msg = send_text(
+                #         text_to_send="/",
+                #         chat_id=message.chat.id
+                #     )
                 text = "Добро пожаловать в мониторинг токен сейлов.\n\n " \
                        "Все токен сейлы, которые я буду находить, буду делиться с тобой!\n\n" \
                        "Можешь выбрать темы, которые тебе интересны и будешь получать новости только по ним!"
                 send_text(text_to_send=text, chat_id=message.chat.id, local_markup=markup_key)
+                # self.bot.edit_message_reply_markup(message_id=self.message_start, chat_id=message.chat.id, reply_markup=markup_key)
             else:
                 markup_moder.add(types.KeyboardButton(text="Разместить новость"))
                 send_text(text_to_send='Чтобы разместить новость нажмите на кнопку ниже!',
@@ -356,38 +355,45 @@ class TgBot:
             markup_key.add(types.InlineKeyboardButton(text='Назад в меню', callback_data='back'))
             text = 'Напишите пожалуйста, что хотите спросить или предложить'
             msg = send_text(text_to_send=text, chat_id=call.message.chat.id, local_markup=markup_key)
+
             self.bot.delete_message(call.message.chat.id, call.message.message_id)
             self.bot.register_next_step_handler(msg, question_and_suggestions, msg.message_id)
 
         @log_error
         def question_and_suggestions(message, message_id):
+            markup_key = types.InlineKeyboardMarkup(row_width=2)
             self.bot.edit_message_reply_markup(message.chat.id, message_id)
+            markup_key.add(types.InlineKeyboardButton(text='Назад в меню', callback_data='back'))
             text = "Спасибо, мы получили ваше сообщение и свяжемся с вами в случае необходимости"
             user = Users.objects.get(user_id=message.chat.id)
             QuestionSuggestions.objects.create(
                 user=user,
                 message=message.text)
-            msg = send_text(text_to_send=text, chat_id=message.chat.id)
-            self.bot.edit_message_reply_markup(message.chat.id, msg.message_id)
-            run(message)
+            send_text(text_to_send=text, chat_id=message.chat.id, local_markup=markup_key)
 
         @log_error
         @self.bot.callback_query_handler(func=lambda call: "_b_unfollow" in call.data)
         def follow_news(call):
-            self.bot.delete_message(call.message.chat.id, call.message.message_id)
+            markup_key = types.InlineKeyboardMarkup(row_width=2)
             theme = Themes.objects.get(name=call.data.split("_b_unfollow")[0])
             user = Users.objects.get(user_id=call.from_user.id)
             user.tracked_themes.remove(theme)
-            run(call.message)
+            markup_key = update_start_message(call.message, markup_key)
+            self.bot.edit_message_reply_markup(chat_id=call.message.chat.id,
+                                               message_id=call.message.message_id,
+                                               reply_markup=markup_key)
 
         @log_error
         @self.bot.callback_query_handler(func=lambda call: "_b_follow" in call.data)
         def follow_news(call):
-            self.bot.delete_message(call.message.chat.id, call.message.message_id)
+            markup_key = types.InlineKeyboardMarkup(row_width=2)
             theme = Themes.objects.get(name=call.data.split("_b_follow")[0])
             user = Users.objects.get(user_id=call.from_user.id)
             user.tracked_themes.add(theme)
-            run(call.message)
+            markup_key = update_start_message(call.message, markup_key)
+            self.bot.edit_message_reply_markup(chat_id=call.message.chat.id,
+                                               message_id=call.message.message_id,
+                                               reply_markup=markup_key)
 
         @log_error
         @self.bot.callback_query_handler(func=lambda call: "_hour" in call.data)

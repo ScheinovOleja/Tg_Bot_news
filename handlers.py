@@ -1,12 +1,13 @@
 import os
 from datetime import datetime
-
 import django
 from telebot import types
 import re
+
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'TelegramBotSaler.TelegramBotSaler.settings')
 django.setup()
-from tg_bot.models import Users, TokenSale, Themes
+
+from tg_bot.models import TokenSale, Themes
 
 
 def project_name_handler(text, context, markup):
