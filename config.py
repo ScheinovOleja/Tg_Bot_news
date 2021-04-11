@@ -36,26 +36,33 @@ SCENARIOS = {
                 },
             'step4':
                 {
-                    'text': 'Тема - {theme}.\n Теперь укажите дату участия\nПример: 03.04.2021',
-                    'failure_text': 'Вы ввели неверный формат даты! Повторите попытку!',
-                    'handler': 'project_date_handle',
+                    'text': 'Если нужно вставить картинку, пришлите ее сюда. Если не нужно, то нажмите на кнопку ниже',
+                    'failure_text': None,
+                    'handler': None,
                     'next_step': 'step5'
                 },
             'step5':
                 {
-                    'text': 'Записал. Теперь укажите время\nПример: 20:21',
-                    'failure_text': 'Вы ввели неверный формат времени! Повторите попытку!',
-                    'handler': 'project_time_handle',
+                    'text': 'Тема - {theme}.\n Теперь укажите дату участия\nПример: 03.04.2021',
+                    'failure_text': 'Вы ввели неверный формат даты! Повторите попытку!',
+                    'handler': 'project_date_handle',
                     'next_step': 'step6'
                 },
             'step6':
                 {
-                    'text': 'Ок, нужно ли вам напоминание?',
-                    'failure_text': None,
-                    'handler': 'project_reminder_handle',
+                    'text': 'Записал. Теперь укажите время\nПример: 20:21',
+                    'failure_text': 'Вы ввели неверный формат времени! Повторите попытку!',
+                    'handler': 'project_time_handle',
                     'next_step': 'step7'
                 },
             'step7':
+                {
+                    'text': 'Ок, нужно ли вам напоминание?',
+                    'failure_text': None,
+                    'handler': 'project_reminder_handle',
+                    'next_step': 'step8'
+                },
+            'step8':
                 {
                     'text': '{description}',
                     'failure_text': None,

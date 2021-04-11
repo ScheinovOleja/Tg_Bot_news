@@ -1,3 +1,4 @@
+import base64
 import re
 import threading
 import time
@@ -90,7 +91,6 @@ class TgBot:
                 except Exception as exc:
                     error = f'Ошибка - {exc}'
                     print(error)
-                    raise exc
 
             return inner
 
@@ -112,12 +112,12 @@ class TgBot:
         @log_error
         @self.bot.message_handler(commands=['clear'])
         def clear(message):
-            test = int(message.message_id)
+            message_id = int(message.message_id)
             while True:
                 try:
-                    test -= 1
-                    self.bot.delete_message(message.chat.id, test)
-                except:
+                    message_id -= 1
+                    self.bot.delete_message(message.chat.id, message_id)
+                except Exception:
                     continue
 
         def update_start_message(message, markup):
@@ -147,7 +147,7 @@ class TgBot:
                         local_markup=types.ReplyKeyboardRemove()
                     )
                     self.bot.delete_message(chat_id=message.chat.id, message_id=msg.message_id)
-                except:
+                except Exception:
                     msg = send_text(
                         text_to_send="/",
                         chat_id=message.chat.id
@@ -190,13 +190,22 @@ class TgBot:
                 send_text(text_to_send='Ты не модер, пшел вон отсюда!', chat_id=message.chat.id)
 
         @log_error
-        def send_text(text_to_send, chat_id, local_markup=None):
-            return self.bot.send_message(
-                chat_id=chat_id,
-                text=text_to_send,
-                reply_markup=local_markup,
-                parse_mode="HTML"
-            )
+        def send_text(text_to_send, chat_id, local_markup=None, photo=None):
+            if photo is not None:
+                return self.bot.send_photo(
+                    chat_id=chat_id,
+                    caption=text_to_send,
+                    reply_markup=local_markup,
+                    parse_mode="HTML",
+                    photo=photo
+                )
+            else:
+                return self.bot.send_message(
+                    chat_id=chat_id,
+                    text=text_to_send,
+                    reply_markup=local_markup,
+                    parse_mode="HTML"
+                )
 
         @log_error
         def send_step(step, chat_id, text, context, local_markup=None):
@@ -209,8 +218,8 @@ class TgBot:
                                              reply_markup=local_markup)
 
         @log_error
-        def get_object_scenario(call):
-            state = ModeratorState.objects.get(user_id=call.message.chat.id)
+        def get_object_scenario(message):
+            state = ModeratorState.objects.get(user_id=message.chat.id)
             steps = SCENARIOS[state.scenario_name]['steps']
             step = steps[state.step_name]
             next_step = steps[step['next_step']]
@@ -245,7 +254,8 @@ class TgBot:
         @self.bot.callback_query_handler(func=lambda call: "_handle" in call.data)
         def callback_scenario(call):
             markup_key = types.InlineKeyboardMarkup(row_width=2)
-            state, step, next_step = get_object_scenario(call)
+            markup_key.add(types.InlineKeyboardButton(text='Пропустить', callback_data='skip'))
+            state, step, next_step = get_object_scenario(call.message)
             state.context['theme'] = call.data.split('_handle')[0]
             send_step(next_step, call.from_user.id, None, state.context, local_markup=markup_key)
             self.bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id)
@@ -253,23 +263,31 @@ class TgBot:
             self.bot.clear_step_handler_by_chat_id(chat_id=call.message.chat.id)
 
         @log_error
+        @self.bot.callback_query_handler(func=lambda call: call.data == 'skip')
+        def skip_step(call):
+            state, step, next_step = get_object_scenario(call.message)
+            state.step_name = step['next_step']
+            send_step(next_step, call.from_user.id, None, state.context)
+            ModeratorState.objects.update(step_name=step['next_step'], context=state.context)
+            self.bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id)
+
+        @log_error
         @self.bot.callback_query_handler(func=lambda call: "_reminder" in call.data)
         def is_reminder(call):
             markup_key = types.InlineKeyboardMarkup(row_width=2)
-            state, step, next_step = get_object_scenario(call)
+            state, step, next_step = get_object_scenario(call.message)
             if 'yes' in call.data:
                 state.context['is_reminder'] = True
-            elif 'no' in call.data:
-                state.context['is_reminder'] = False
-            if state.context['is_reminder']:
                 markup_key.add(types.InlineKeyboardButton(text="Напомнить за 12 часов", callback_data="unuseful"))
                 markup_key.add(types.InlineKeyboardButton(text="Напомнить за 1 час", callback_data="unuseful"))
+            elif 'no' in call.data:
+                state.context['is_reminder'] = False
             send_step(next_step, call.message.chat.id, None, state.context, local_markup=markup_key)
-            self.bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id)
+            # self.bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id)
             markup_key = types.InlineKeyboardMarkup(row_width=2)
             markup_key.add(types.InlineKeyboardButton(text="Разместить запись", callback_data="post_answer"))
             markup_key.add(types.InlineKeyboardButton(text="Удалить запись", callback_data="delete_answer"))
-            send_text(text_to_send='...', chat_id=call.message.chat.id, local_markup=markup_key)
+            self.bot.send_message(text='...', chat_id=call.message.chat.id, reply_markup=markup_key)
             ModeratorState.objects.update(step_name=step['next_step'], context=state.context)
 
         @log_error
@@ -281,16 +299,24 @@ class TgBot:
                     theme = None
                 else:
                     theme = Themes.objects.get(name=state.context['theme'])
+                try:
+                    if state.context['image']:
+                        image = state.context['image'].encode('utf-8')
+                    else:
+                        image = None
+                except KeyError:
+                    image = None
                 TokenSale.objects.create(
                     name=state.context['name'],
                     description=state.context['description'],
                     is_reminder=state.context['is_reminder'],
                     date_participation=datetime.strptime(state.context['date_participation'], '%d.%m.%Y %H:%M'),
                     theme=theme,
+                    image=image
                 )
-                mail_subscribers(state.context)
                 self.bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id)
                 self.bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id - 1)
+                mail_subscribers(state.context)
                 ModeratorState.objects.filter(user_id=state.user_id).delete()
             else:
                 ModeratorState.objects.filter(user_id=state.user_id).delete()
@@ -313,10 +339,14 @@ class TgBot:
                 markup_key.add(types.InlineKeyboardButton(
                     text="Напомнить за 1 часов", callback_data=f"{new.id}_one_hour"))
             for user in users:
+                decoded = None
+                if new.image:
+                    decoded = base64.b64decode(new.image)
                 send_text(
                     chat_id=user.user_id,
                     text_to_send=text,
-                    local_markup=markup_key
+                    local_markup=markup_key,
+                    photo=decoded
                 )
 
         @log_error
@@ -401,6 +431,18 @@ class TgBot:
                 message_id=call.message.message_id,
                 reply_markup=markup_key
             )
+
+        @log_error
+        @self.bot.message_handler(content_types=['photo'])
+        def test_image(message):
+            state, step, next_step = get_object_scenario(message)
+            image_info = self.bot.get_file(message.photo[-1].file_id)
+            image = self.bot.download_file(image_info.file_path)
+            encoded = base64.b64encode(image)
+            state.context['image'] = encoded.decode('utf-8')
+            send_step(next_step, message.chat.id, None, state.context)
+            ModeratorState.objects.update(step_name=step['next_step'], context=state.context)
+            self.bot.edit_message_reply_markup(message.chat.id, message.message_id)
 
 
 if __name__ == '__main__':

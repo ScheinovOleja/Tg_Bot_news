@@ -30,6 +30,7 @@ class TokenSale(models.Model):
     description = models.TextField(verbose_name="Описание")
     is_reminder = models.BooleanField(default=True, verbose_name="Оповещать?")
     date_participation = models.DateTimeField(null=True, verbose_name="Крайняя дата регистрации")
+    image = models.BinaryField(null=True, verbose_name='Изображение')
     theme = models.ForeignKey(Themes, null=True, on_delete=models.DO_NOTHING, verbose_name="Тема")
 
     def __str__(self):
