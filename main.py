@@ -358,8 +358,8 @@ class TgBot:
                 users = Users.objects.filter(tracked_themes=theme.id)
             new = TokenSale.objects.get(name=context['name'])
             text = f'Новая новость!!\n\n' \
-                   f'{new.name}{" " if not theme else f" на {theme.name}"}\n\n' \
-                   f'Конец регистрации - {new.date_participation.replace(tzinfo=None)}\n\n' \
+                   f'{new.name}{"" if not theme else f"на {theme.name}"}\n\n' \
+                   f'Конец регистрации - {new.date_participation}\n\n' \
                    f'{new.description}'
             if new.is_reminder:
                 markup_key.add(types.InlineKeyboardButton(
