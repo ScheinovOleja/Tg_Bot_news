@@ -24,40 +24,6 @@ class TgBot:
         self.message_start = None
         self.news = None
 
-    # def async_mailing(self):
-    #     self.news = TokenSale.objects.all()
-    #     test = []
-    #     while True:
-    #         for new
-    #         markup_key = types.InlineKeyboardMarkup(row_width=2)
-    #         try:
-    #             theme = Themes.objects.get(name=context['theme'])
-    #         except Exception:
-    #             theme = None
-    #             users = Users.objects.all()
-    #         else:
-    #             users = Users.objects.filter(tracked_themes=theme.id)
-    #         new = TokenSale.objects.get(name=context['name'])
-    #         text = f'Новая новость!!\n\n' \
-    #                f'{new.name}{"" if not theme else f"на {theme.name}"}\n\n' \
-    #                f'Конец регистрации - {new.date_participation}\n\n' \
-    #                f'{new.description}'
-    #         if new.is_reminder:
-    #             markup_key.add(types.InlineKeyboardButton(
-    #                 text="Напомнить за 12 часов", callback_data=f"{new.id}_twelve_hours"))
-    #             markup_key.add(types.InlineKeyboardButton(
-    #                 text="Напомнить за 1 часов", callback_data=f"{new.id}_one_hour"))
-    #         if new.is_follow:
-    #             markup_key.add(types.InlineKeyboardButton(
-    #                 text="Следить за результатами",
-    #                 callback_data=f"{new.theme.name}_b_follow"))
-    #         for user in users:
-    #             send_text(
-    #                 chat_id=user.user_id,
-    #                 text_to_send=text,
-    #                 local_markup=markup_key
-    #             )
-
     def async_reminder(self):
         while True:
             reminder = ReminderUsers.objects.all()
@@ -94,13 +60,13 @@ class TgBot:
                 if user not in moderators and user.is_moderator and not user.notified:
                     moderators.append(user)
                     self.bot.send_message(
-                        text=f"Теперь ты модератор! Пропиши /start, чтобы обновиться",
+                        text=f"Теперь ты модератор!\nПропиши /start, чтобы обновиться.",
                         chat_id=user.user_id)
                     Users.objects.filter(user_id=user.user_id).update(notified=True)
                 elif user in moderators and not user.is_moderator and user.notified:
                     moderators.remove(user)
                     self.bot.send_message(
-                        text=f"С тебя сняли должность модератора. Пропиши /start, чтобы обновиться",
+                        text=f"С тебя сняли должность модератора.\nПропиши /start, чтобы обновиться.",
                         chat_id=user.user_id)
                     Users.objects.filter(user_id=user.user_id).update(notified=False)
             time.sleep(5)
@@ -174,24 +140,25 @@ class TgBot:
             self.message_start = message.message_id
             markup_moder = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
             if not check_moderator(message):
+                try:
+                    msg = send_text(
+                        text_to_send="/",
+                        chat_id=message.chat.id,
+                        local_markup=types.ReplyKeyboardRemove()
+                    )
+                    self.bot.delete_message(chat_id=message.chat.id, message_id=msg.message_id)
+                except:
+                    msg = send_text(
+                        text_to_send="/",
+                        chat_id=message.chat.id
+                    )
+                    self.bot.delete_message(chat_id=message.chat.id, message_id=msg.message_id)
                 markup_key = types.InlineKeyboardMarkup(row_width=2)
                 markup_key = update_start_message(message, markup_key)
-                # try:
-                #     msg = send_text(
-                #         text_to_send="/",
-                #         chat_id=message.chat.id,
-                #         local_markup=types.ReplyKeyboardRemove()
-                #     )
-                # except:
-                #     msg = send_text(
-                #         text_to_send="/",
-                #         chat_id=message.chat.id
-                #     )
                 text = "Добро пожаловать в мониторинг токен сейлов.\n\n " \
                        "Все токен сейлы, которые я буду находить, буду делиться с тобой!\n\n" \
                        "Можешь выбрать темы, которые тебе интересны и будешь получать новости только по ним!"
                 send_text(text_to_send=text, chat_id=message.chat.id, local_markup=markup_key)
-                # self.bot.edit_message_reply_markup(message_id=self.message_start, chat_id=message.chat.id, reply_markup=markup_key)
             else:
                 markup_moder.add(types.KeyboardButton(text="Разместить новость"))
                 send_text(text_to_send='Чтобы разместить новость нажмите на кнопку ниже!',
@@ -203,7 +170,7 @@ class TgBot:
         def scenario_moderator(message):
             if check_moderator(message):
                 state = None
-                text = message.text
+                text = message.html_text
                 chat_id = message.chat.id
                 try:
                     state = ModeratorState.objects.get(user_id=chat_id)
@@ -227,13 +194,15 @@ class TgBot:
             return self.bot.send_message(
                 chat_id=chat_id,
                 text=text_to_send,
-                reply_markup=local_markup)
+                reply_markup=local_markup,
+                parse_mode="HTML"
+            )
 
         @log_error
         def send_step(step, chat_id, text, context, local_markup=None):
             if text is None:
                 return self.bot.send_message(chat_id=chat_id, text=step['text'].format(**context),
-                                             reply_markup=local_markup)
+                                             reply_markup=local_markup, parse_mode="HTML")
             else:
                 return self.bot.send_message(chat_id=chat_id,
                                              text=text,
@@ -288,37 +257,20 @@ class TgBot:
         def is_reminder(call):
             markup_key = types.InlineKeyboardMarkup(row_width=2)
             state, step, next_step = get_object_scenario(call)
-            markup_key.add(types.InlineKeyboardButton(text=f"Да", callback_data=f"yes_follow"))
-            markup_key.add(types.InlineKeyboardButton(text=f"Нет", callback_data=f"no_follow"))
             if 'yes' in call.data:
                 state.context['is_reminder'] = True
             elif 'no' in call.data:
                 state.context['is_reminder'] = False
-            send_step(next_step, call.message.chat.id, None, state.context, local_markup=markup_key)
-            self.bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id)
-            ModeratorState.objects.update(step_name=step['next_step'], context=state.context)
-            return
-
-        @log_error
-        @self.bot.callback_query_handler(func=lambda call: "_follow" in call.data and "_b_follow" not in call.data)
-        def is_follow(call):
-            markup_key = types.InlineKeyboardMarkup(row_width=2)
-            state, step, next_step = get_object_scenario(call)
-            if 'yes' in call.data:
-                state.context['is_follow'] = True
-                markup_key.add(types.InlineKeyboardButton(text="Следить за результатами", callback_data="unuseful"))
-            elif 'no' in call.data:
-                state.context['is_follow'] = False
             if state.context['is_reminder']:
                 markup_key.add(types.InlineKeyboardButton(text="Напомнить за 12 часов", callback_data="unuseful"))
                 markup_key.add(types.InlineKeyboardButton(text="Напомнить за 1 час", callback_data="unuseful"))
             send_step(next_step, call.message.chat.id, None, state.context, local_markup=markup_key)
             self.bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id)
-            ModeratorState.objects.update(step_name=step['next_step'], context=state.context)
             markup_key = types.InlineKeyboardMarkup(row_width=2)
             markup_key.add(types.InlineKeyboardButton(text="Разместить запись", callback_data="post_answer"))
             markup_key.add(types.InlineKeyboardButton(text="Удалить запись", callback_data="delete_answer"))
             send_text(text_to_send='...', chat_id=call.message.chat.id, local_markup=markup_key)
+            ModeratorState.objects.update(step_name=step['next_step'], context=state.context)
 
         @log_error
         @self.bot.callback_query_handler(func=lambda call: "_answer" in call.data)
@@ -333,7 +285,6 @@ class TgBot:
                     name=state.context['name'],
                     description=state.context['description'],
                     is_reminder=state.context['is_reminder'],
-                    is_follow=state.context['is_follow'],
                     date_participation=datetime.strptime(state.context['date_participation'], '%d.%m.%Y %H:%M'),
                     theme=theme,
                 )
@@ -344,7 +295,6 @@ class TgBot:
             else:
                 ModeratorState.objects.filter(user_id=state.user_id).delete()
             self.bot.clear_step_handler_by_chat_id(chat_id=call.message.chat.id)
-            return
 
         @log_error
         def mail_subscribers(context):
@@ -352,24 +302,16 @@ class TgBot:
             try:
                 theme = Themes.objects.get(name=context['theme'])
             except Exception:
-                theme = None
                 users = Users.objects.all()
             else:
                 users = Users.objects.filter(tracked_themes=theme.id)
             new = TokenSale.objects.get(name=context['name'])
-            text = f'Новая новость!!\n\n' \
-                   f'{new.name}{"" if not theme else f"на {theme.name}"}\n\n' \
-                   f'Конец регистрации - {new.date_participation}\n\n' \
-                   f'{new.description}'
+            text = f'{new.description}'
             if new.is_reminder:
                 markup_key.add(types.InlineKeyboardButton(
                     text="Напомнить за 12 часов", callback_data=f"{new.id}_twelve_hours"))
                 markup_key.add(types.InlineKeyboardButton(
                     text="Напомнить за 1 часов", callback_data=f"{new.id}_one_hour"))
-            if new.is_follow:
-                markup_key.add(types.InlineKeyboardButton(
-                    text="Следить за результатами",
-                    callback_data=f"{new.theme.name}_b_follow"))
             for user in users:
                 send_text(
                     chat_id=user.user_id,
@@ -408,7 +350,7 @@ class TgBot:
 
         @log_error
         @self.bot.callback_query_handler(func=lambda call: "_b_unfollow" in call.data)
-        def follow_news(call):
+        def unfollow_news(call):
             markup_key = types.InlineKeyboardMarkup(row_width=2)
             theme = Themes.objects.get(name=call.data.split("_b_unfollow")[0])
             user = Users.objects.get(user_id=call.from_user.id)
@@ -433,9 +375,10 @@ class TgBot:
         @log_error
         @self.bot.callback_query_handler(func=lambda call: "_hour" in call.data)
         def reminder_twelve(call):
+            markup_key = types.InlineKeyboardMarkup(row_width=2)
             user = Users.objects.get(user_id=call.message.chat.id)
             new = TokenSale.objects.get(id=int(re.match(r'\d*', call.data).group()))
-            result, _ = ReminderUsers.objects.get_or_create(
+            result, _ = ReminderUsers.objects.update_or_create(
                 user_id=user.id,
                 token_sale_id=new.id,
                 defaults={
@@ -443,13 +386,20 @@ class TgBot:
                     'twelve': True if "twelve" in call.data else False
                 }
             )
-            send_text(
-                text_to_send=f'Мы обязательно оповестим вас за '
-                             f'{"1 час" if "one" in call.data else "12 часов"} до начала!!',
-                chat_id=call.from_user.id)
+            if 'twelve' in call.data:
+                markup_key.add(types.InlineKeyboardButton(
+                    text="✅ Напомнить за 12 часов", callback_data=f"{new.id}_twelve_hours"))
+                markup_key.add(types.InlineKeyboardButton(
+                    text="Напомнить за 1 часов", callback_data=f"{new.id}_one_hour"))
+            elif 'one' in call.data:
+                markup_key.add(types.InlineKeyboardButton(
+                    text="Напомнить за 12 часов", callback_data=f"{new.id}_twelve_hours"))
+                markup_key.add(types.InlineKeyboardButton(
+                    text="✅ Напомнить за 1 часов", callback_data=f"{new.id}_one_hour"))
             self.bot.edit_message_reply_markup(
-                call.from_user.id,
-                call.message.message_id,
+                chat_id=call.from_user.id,
+                message_id=call.message.message_id,
+                reply_markup=markup_key
             )
 
 

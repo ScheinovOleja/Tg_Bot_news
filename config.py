@@ -57,14 +57,7 @@ SCENARIOS = {
                 },
             'step7':
                 {
-                    'text': 'Понял. Нужна ли кнопка "Следить за результатами?',
-                    'failure_text': None,
-                    'handler': 'project_follow_handle',
-                    'next_step': 'step8'
-                },
-            'step8':
-                {
-                    'text': '{name}\n{date_participation}\n{description}',
+                    'text': '{description}',
                     'failure_text': None,
                     'handler': None,
                     'next_step': None

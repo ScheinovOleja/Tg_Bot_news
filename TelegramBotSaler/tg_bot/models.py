@@ -29,7 +29,6 @@ class TokenSale(models.Model):
     name = models.CharField(max_length=50, unique=True, verbose_name="Название")
     description = models.TextField(verbose_name="Описание")
     is_reminder = models.BooleanField(default=True, verbose_name="Оповещать?")
-    is_follow = models.BooleanField(default=True, verbose_name="Отслеживать?")
     date_participation = models.DateTimeField(null=True, verbose_name="Крайняя дата регистрации")
     theme = models.ForeignKey(Themes, null=True, on_delete=models.DO_NOTHING, verbose_name="Тема")
 
