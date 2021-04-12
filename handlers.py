@@ -31,12 +31,15 @@ def project_theme_handler(text, context, markup):
 
 
 def project_date_handle(text, context, markup):
-    test_1 = datetime.strptime(text, '%d.%m.%Y')
-    test_2 = datetime.today()
+    date = int(text.split('.')[0])
+    month = int(text.split('.')[1])
     if re.match(r'\d\d[.]\d\d[.]\d\d\d\d', text):
-        if test_1 >= test_2:
-            context['date_participation'] = text
-            return True, markup
+        if 32 >= date > 0 < month <= 12:
+            if datetime.strptime(text, '%d.%m.%Y') >= datetime.today():
+                context['date_participation'] = text
+                return True, markup
+            else:
+                return False, None
         else:
             return False, None
     else:
