@@ -29,8 +29,8 @@ class OTPAdmin(OTPAdminSite):
 
 from django.contrib.auth.models import User
 from django_otp.plugins.otp_totp.models import TOTPDevice
-from tg_bot.models import TokenSale, Users, Themes, QuestionSuggestions, ReminderUsers
-from tg_bot.admin import TokenAdmin, UsersAdmin, ThemesAdmin, QuestionAdmin, ReminderUsersAdmin
+from tg_bot.models import TokenSale, Users, Themes, QuestionSuggestions, ReminderUsers, ModeratorState
+from tg_bot.admin import TokenAdmin, UsersAdmin, ThemesAdmin, QuestionAdmin, ReminderUsersAdmin, ModeratorStateAdmin
 
 admin_site = OTPAdmin(name='OTPAdmin')
 admin_site.register(User)
@@ -40,6 +40,7 @@ admin_site.register(Users, UsersAdmin)
 admin_site.register(Themes, ThemesAdmin)
 admin_site.register(QuestionSuggestions, QuestionAdmin)
 admin_site.register(ReminderUsers, ReminderUsersAdmin)
+admin_site.register(ModeratorState, ModeratorStateAdmin)
 admin_site.register(Theme, ThemeAdmin)
 
 urlpatterns = [

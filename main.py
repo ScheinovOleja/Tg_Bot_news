@@ -18,6 +18,22 @@ django.setup()
 from tg_bot.models import Users, TokenSale, ModeratorState, Themes, QuestionSuggestions, ReminderUsers
 
 
+def log_error(f):
+    """
+    Обработчик ошибок
+    :param f: обрабатываемая функция
+    """
+
+    def inner(*args, **kwargs):
+        try:
+            return f(*args, **kwargs)
+        except Exception as exc:
+            error = f'Ошибка - {exc}'
+            print(error)
+
+    return inner
+
+
 class TgBot:
 
     def __init__(self):
@@ -25,97 +41,111 @@ class TgBot:
         self.def_bots()
         self.message_start = None
 
+    @log_error
     def async_reminder(self):
         """
         Проверка в фоне на оповещения за 1 и 12 часов
         """
         while True:
-            reminder = ReminderUsers.objects.all()
-            for item in reminder:
-                then = item.token_sale.date_participation.replace(tzinfo=None)
-                now = datetime.now().replace(tzinfo=None)
-                duration = then - now
-                seconds = 3600 if item.one else 43200
-                if duration.total_seconds() <= seconds:
-                    item.delete()
-                    self.bot.send_message(
-                        text=f"{'Остался 1 час' if seconds == 3600 else 'Осталось 12 часов'} до закрытия регистрации в "
-                             f"{item.token_sale.name} на {item.token_sale.theme.name}",
-                        chat_id=item.user.user_id)
-                time.sleep(60)
+            try:
+                reminder = ReminderUsers.objects.all()
+                for item in reminder:
+                    then = item.token_sale.date_participation.replace(tzinfo=None)
+                    now = datetime.now().replace(tzinfo=None)
+                    duration = then - now
+                    seconds_one = 3600
+                    seconds_twelve = 43200
+                    if duration.total_seconds() <= seconds_one and item.one:
+                        self.bot.send_message(
+                            text=f"Остался 1 час до закрытия регистрации в "
+                                 f"{item.token_sale.name} "
+                                 f"{f'на {item.token_sale.theme.name}' if item.token_sale.theme else ''}",
+                            chat_id=item.user.user_id)
+                        item.one = False
+                    elif duration.total_seconds() <= seconds_twelve and item.twelve:
+                        self.bot.send_message(
+                            text=f"Остался 12 часов до закрытия регистрации в "
+                                 f"{item.token_sale.name} "
+                                 f"{f'на {item.token_sale.theme.name}' if item.token_sale.theme else ''}",
+                            chat_id=item.user.user_id)
+                        item.twelve = False
+                    item.save()
+                    if not item.one and not item.twelve:
+                        item.delete()
+            except:
+                time.sleep(1)
+                continue
+            time.sleep(1)
 
     @staticmethod
+    @log_error
     def async_clean():
         """
         Фоновая проверка на просроченные новости
         """
         while True:
-            token_sale = TokenSale.objects.all()
-            for item in token_sale:
-                then = item.date_participation.replace(tzinfo=None)
-                now = datetime.now().replace(tzinfo=None)
-                duration = then - now
-                if duration.total_seconds() < 0:
-                    TokenSale.objects.filter(id=item.id).delete()
-            time.sleep(60)
+            try:
+                token_sale = TokenSale.objects.all()
+                for item in token_sale:
+                    then = item.date_participation.replace(tzinfo=None)
+                    now = datetime.now().replace(tzinfo=None)
+                    duration = then - now
+                    if duration.total_seconds() < 0:
+                        TokenSale.objects.filter(id=item.id).delete()
+            except:
+                time.sleep(1)
+                continue
+            time.sleep(300)
 
+    @log_error
     def async_check_moderator(self):
         """
         Фоновая проверка и оповещение, если назначили модератора
         """
-        markup_moder = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
         while True:
-            users = Users.objects.all()
-            for user in users:
-                if user.is_moderator and not user.notified:
-                    markup_moder.add(types.KeyboardButton(text="Разместить новость"))
-                    self.bot.send_message(
-                        text=f"Вас назначили модератором.\nНажмите на /start чтобы обновить бота",
-                        chat_id=user.user_id,
-                        reply_markup=markup_moder
-                    )
-                    Users.objects.filter(user_id=user.user_id).update(notified=True)
-                elif not user.is_moderator and user.notified:
-                    self.bot.send_message(
-                        text=f"С вас сняли должность модератора.\nНажмите /start, чтобы обновиться.",
-                        chat_id=user.user_id,
-                        reply_markup=types.ReplyKeyboardRemove()
-                    )
-                    Users.objects.filter(user_id=user.user_id).update(notified=False)
-            time.sleep(5)
+            try:
+                markup_moder = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+                users = Users.objects.all()
+                for user in users:
+                    if user.is_moderator and not user.notified:
+                        markup_moder.add(types.KeyboardButton(text="Разместить новость"))
+                        self.bot.send_message(
+                            text=f"Вас назначили модератором.\nНажмите на /start чтобы обновить бота",
+                            chat_id=user.user_id,
+                            reply_markup=markup_moder
+                        )
+                        Users.objects.filter(user_id=user.user_id).update(notified=True)
+                    elif not user.is_moderator and user.notified:
+                        self.bot.send_message(
+                            text=f"С вас сняли должность модератора.\nНажмите /start, чтобы обновиться.",
+                            chat_id=user.user_id,
+                            reply_markup=types.ReplyKeyboardRemove()
+                        )
+                        Users.objects.filter(user_id=user.user_id).update(notified=False)
+            except:
+                time.sleep(1)
+                continue
+            time.sleep(0.5)
 
+    @log_error
     def prepare(self):
         """
         Основной метод с запуском всего хаоса.
         """
-        task_reminder = threading.Thread(target=self.async_reminder)
-        task_cleaning = threading.Thread(target=self.async_clean)
-        task_check = threading.Thread(target=self.async_check_moderator)
-        task_bot = threading.Thread(target=self.bot.polling, kwargs={'none_stop': True, 'interval': 0})
-        task_reminder.start()
-        task_bot.start()
-        task_cleaning.start()
-        task_check.start()
+        threading.Thread(target=self.async_reminder, daemon=True).start()
+        threading.Thread(target=self.async_clean, daemon=True).start()
+        threading.Thread(target=self.async_check_moderator, daemon=True).start()
+        while True:
+            try:
+                self.bot.polling(none_stop=True)
+            except Exception as exc:
+                self.bot.stop_polling()
+                print('Завершился')
 
     def def_bots(self):
         """
         Хранит в себе все методы бота
         """
-
-        def log_error(f):
-            """
-            Обработчик ошибок
-            :param f: обрабатываемая функция
-            """
-
-            def inner(*args, **kwargs):
-                try:
-                    return f(*args, **kwargs)
-                except Exception as exc:
-                    error = f'Ошибка - {exc}'
-                    print(error)
-
-            return inner
 
         @log_error
         def check_moderator(message):
@@ -142,11 +172,12 @@ class TgBot:
             Очистка истории сообщений
             """
             message_id = int(message.message_id)
-            while True:
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline:
                 try:
                     message_id -= 1
                     self.bot.delete_message(message.chat.id, message_id)
-                except Exception:
+                except:
                     continue
 
         @log_error
@@ -160,12 +191,9 @@ class TgBot:
             tracked_themes = user.tracked_themes.all()
             themes = Themes.objects.all()
             for theme in themes:
-                if theme in tracked_themes:
-                    markup.add(types.InlineKeyboardButton(text=f"✅ {theme.name}",
-                                                          callback_data=f"{theme.name}_b_unfollow"))
-                else:
-                    markup.add(types.InlineKeyboardButton(text=f"{theme.name}",
-                                                          callback_data=f"{theme.name}_b_follow"))
+                markup.add(types.InlineKeyboardButton(
+                    text=f"{f'✅ {theme.name}' if theme in tracked_themes else f'{theme.name}'}",
+                    callback_data=f"{f'{theme.name}_b_unfollow' if theme in tracked_themes else f'{theme.name}_b_follow'}"))
             markup.add(types.InlineKeyboardButton(text="Вопрос/предложение ✍🏻", callback_data="question"))
             return markup
 
@@ -298,7 +326,8 @@ class TgBot:
                 next_step = steps[step['next_step']]
                 send_step(next_step, chat_id, None, state.context, local_markup=markup_key)
                 if next_step['next_step']:
-                    ModeratorState.objects.update(step_name=step['next_step'], context=state.context)
+                    ModeratorState.objects.filter(user_id=state.user_id).update(step_name=step['next_step'],
+                                                                                context=state.context)
             else:
                 text_to_send = step['failure_text'].format(**state.context)
                 send_text(text_to_send, chat_id)
@@ -316,7 +345,8 @@ class TgBot:
             state.context['theme'] = call.data.split('_handle')[0]
             send_step(next_step, call.from_user.id, None, state.context, local_markup=markup_key)
             self.bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id)
-            ModeratorState.objects.update(step_name=step['next_step'], context=state.context)
+            ModeratorState.objects.filter(user_id=state.user_id).update(step_name=step['next_step'],
+                                                                        context=state.context)
             self.bot.clear_step_handler_by_chat_id(chat_id=call.message.chat.id)
 
         @log_error
@@ -328,7 +358,8 @@ class TgBot:
             state, step, next_step = get_object_scenario(call.message)
             state.step_name = step['next_step']
             send_step(next_step, call.from_user.id, None, state.context)
-            ModeratorState.objects.update(step_name=step['next_step'], context=state.context)
+            ModeratorState.objects.filter(user_id=state.user_id).update(step_name=step['next_step'],
+                                                                        context=state.context)
             self.bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id)
 
         @log_error
@@ -351,7 +382,8 @@ class TgBot:
             markup_key.add(types.InlineKeyboardButton(text="Разместить запись", callback_data="post_answer"))
             markup_key.add(types.InlineKeyboardButton(text="Удалить запись", callback_data="delete_answer"))
             self.bot.send_message(text='...', chat_id=call.message.chat.id, reply_markup=markup_key)
-            ModeratorState.objects.update(step_name=step['next_step'], context=state.context)
+            ModeratorState.objects.filter(user_id=state.user_id).update(step_name=step['next_step'],
+                                                                        context=state.context)
 
         @log_error
         @self.bot.callback_query_handler(func=lambda call: "_answer" in call.data)
@@ -409,8 +441,9 @@ class TgBot:
                 users = Users.objects.all()
             else:
                 users = Users.objects.filter(tracked_themes=theme.id)
-            new = TokenSale.objects.get(name=context['name'])
-            text = f'{new.description}'
+            new = TokenSale.objects.get(name=context['name'], description=context['description'])
+            text = f'{new.name}\n' \
+                   f'{new.description}'
             if new.is_reminder:
                 markup_key.add(types.InlineKeyboardButton(
                     text="Напомнить за 12 часов", callback_data=f"{new.id}_twelve_hours"))
@@ -503,24 +536,28 @@ class TgBot:
             markup_key = types.InlineKeyboardMarkup(row_width=2)
             user = Users.objects.get(user_id=call.message.chat.id)
             new = TokenSale.objects.get(id=int(re.match(r'\d*', call.data).group()))
-            result, _ = ReminderUsers.objects.update_or_create(
-                user_id=user.id,
+            reminder, _ = ReminderUsers.objects.get_or_create(
                 token_sale_id=new.id,
+                user_id=user.id,
                 defaults={
                     'one': True if "one" in call.data else False,
                     'twelve': True if "twelve" in call.data else False
                 }
             )
-            if 'twelve' in call.data:
-                markup_key.add(types.InlineKeyboardButton(
-                    text="✅ Напомнить за 12 часов", callback_data=f"{new.id}_twelve_hours"))
-                markup_key.add(types.InlineKeyboardButton(
-                    text="Напомнить за 1 час", callback_data=f"{new.id}_one_hour"))
-            else:
-                markup_key.add(types.InlineKeyboardButton(
-                    text="Напомнить за 12 часов", callback_data=f"{new.id}_twelve_hours"))
-                markup_key.add(types.InlineKeyboardButton(
-                    text="✅ Напомнить за 1 час", callback_data=f"{new.id}_one_hour"))
+            result, _ = ReminderUsers.objects.update_or_create(
+                user_id=user.id,
+                token_sale_id=new.id,
+                defaults={
+                    'one': True if "one" in call.data else reminder.one,
+                    'twelve': True if "twelve" in call.data else reminder.twelve
+                }
+            )
+            markup_key.add(types.InlineKeyboardButton(
+                text=f"{'✅ Напомнить за 12 часов' if result.twelve else 'Напомнить за 12 часов'}",
+                callback_data=f"{new.id}_twelve_hours"))
+            markup_key.add(types.InlineKeyboardButton(
+                text=f"{'✅ Напомнить за 1 час' if result.one else 'Напомнить за 1 час'}",
+                callback_data=f"{new.id}_one_hour"))
             self.bot.edit_message_reply_markup(
                 chat_id=call.from_user.id,
                 message_id=call.message.message_id,
@@ -539,7 +576,8 @@ class TgBot:
             encoded = base64.b64encode(image)
             state.context['image'] = encoded.decode('utf-8')
             send_step(next_step, message.chat.id, None, state.context)
-            ModeratorState.objects.update(step_name=step['next_step'], context=state.context)
+            ModeratorState.objects.filter(user_id=state.user_id).update(step_name=step['next_step'],
+                                                                        context=state.context)
             self.bot.edit_message_reply_markup(message.chat.id, message.message_id)
 
 

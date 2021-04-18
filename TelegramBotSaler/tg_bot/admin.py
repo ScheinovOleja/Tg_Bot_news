@@ -42,6 +42,10 @@ class ReminderUsersAdmin(admin.ModelAdmin):
     list_filter = ['user']
 
 
+class ModeratorStateAdmin(admin.ModelAdmin):
+    list_display = ['user_id']
+
+
 # admin.site.register(TokenSale, TokenAdmin)
 # admin.site.register(Users, UsersAdmin)
 # admin.site.register(Themes, ThemesAdmin)

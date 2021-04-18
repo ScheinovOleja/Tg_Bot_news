@@ -1,3 +1,7 @@
+import sys
+
+sys.path.append('/home/Schuler/Tg_Bot_news/TelegramBotSaler')
+
 import os
 from datetime import datetime
 import django
@@ -11,11 +15,11 @@ from tg_bot.models import TokenSale, Themes
 
 
 def project_name_handler(text, context, markup):
-    if TokenSale.objects.filter(name=text):
-        return False, None
-    else:
-        context['name'] = text
-        return True, markup
+    # if TokenSale.objects.filter(name=text):
+    #     return False, None
+    # else:
+    context['name'] = text
+    return True, markup
 
 
 def project_description_handler(text, context, markup):
@@ -35,11 +39,8 @@ def project_date_handle(text, context, markup):
     month = int(text.split('.')[1])
     if re.match(r'\d\d[.]\d\d[.]\d\d\d\d', text):
         if 32 >= date > 0 < month <= 12:
-            if datetime.strptime(text, '%d.%m.%Y') >= datetime.today():
-                context['date_participation'] = text
-                return True, markup
-            else:
-                return False, None
+            context['date_participation'] = text
+            return True, markup
         else:
             return False, None
     else:

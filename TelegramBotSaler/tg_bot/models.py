@@ -26,7 +26,7 @@ class TokenSale(models.Model):
     class Meta:
         verbose_name_plural = 'Список новостей'
 
-    name = models.CharField(max_length=50, unique=True, verbose_name="Название")
+    name = models.CharField(max_length=50, verbose_name="Название")
     description = models.TextField(verbose_name="Описание")
     is_reminder = models.BooleanField(default=True, verbose_name="Оповещать?")
     date_participation = models.DateTimeField(null=True, verbose_name="Крайняя дата регистрации")
